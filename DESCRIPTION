@@ -1,0 +1,40 @@
+Package: LPPLS
+Title: Log Periodic Power Law Singularity Model for Financial Bubbles
+Version: 0.1.0
+Authors@R: 
+    person("Your", "Name", , "your.email@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: Implementation of the Log Periodic Power Law Singularity (LPPLS) 
+    model for detecting and analyzing financial bubbles. The package provides 
+    functions for model estimation, confidence indicator calculation, and 
+    visualization of results. Based on the theoretical framework developed by 
+    Johansen, Ledoit, and Sornette for identifying critical points in financial 
+    time series that may precede market crashes.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    nloptr,
+    zoo,
+    lubridate,
+    dplyr,
+    parallel,
+    doParallel,
+    tseries,
+    foreach,
+    progress,
+    magrittr
+Suggests:
+    quantmod,
+    ggplot2,
+    tidyr,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    progress,
+    R6
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+URL: https://github.com/yourusername/LPPLS
+BugReports: https://github.com/yourusername/LPPLS/issues
