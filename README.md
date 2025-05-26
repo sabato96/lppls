@@ -209,9 +209,9 @@ If you use this package in your research, please cite:
 ```bibtex
 @Manual{LPPLS,
   title = {LPPLS: Log Periodic Power Law Singularity Model for Financial Bubbles},
-  author = {Your Name},
+  author = {Sabato Gargiulo},
   year = {2024},
   note = {R package version 0.1.0},
-  url = {https://github.com/yourusername/LPPLS}
+  url = {https://github.com/sabato96/LPPLS}
 }
 ```
