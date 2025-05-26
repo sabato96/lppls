@@ -4,12 +4,14 @@
 \alias{lppls_estimate}
 \title{LPPLS Model Estimation Function}
 \usage{
-lppls_estimate(data, plot = FALSE)
+lppls_estimate(data, plot = FALSE, optimizer = "mlsl")
 }
 \arguments{
 \item{data}{A data frame with columns Date, Close, and t (decimal time)}
 
 \item{plot}{Logical, whether to plot the fitted model}
+
+\item{optimizer}{Character, optimization method to use ("mlsl" or "de")}
 }
 \value{
 A data frame with estimation results and parameters

@@ -8,6 +8,7 @@
 #' @param folder Output folder path (default: "./results/")
 #' @param progress Logical, whether to show progress tracking (default: TRUE)
 #' @param benchmark Logical, whether to show detailed timing information (default: TRUE)
+#' @param optimizer Character, optimization method to use ("mlsl", "de", or "hybrid")
 #' @return Data frame with confidence indicators
 #' @export
 #' @importFrom parallel makeForkCluster stopCluster
@@ -18,17 +19,18 @@
 compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
                                      min_window = 1, save = FALSE,
                                      folder = "./results/", progress = TRUE,
-                                     benchmark = TRUE) {
+                                     benchmark = TRUE, optimizer = "mlsl") {
+
+  # Validate optimizer parameter
+  valid_optimizers <- c("mlsl", "de", "hybrid")
+  if (!optimizer %in% valid_optimizers) {
+    stop("optimizer must be one of: ", paste(valid_optimizers, collapse = ", "))
+  }
 
   # Initialize timer if benchmarking is enabled
-
-  # Always show completion message
-  cat("\n")
-  cat(paste(rep("=", 50), collapse = ""), "\n")
-  cat("✓ Window processing completed!\n")
-
   if (benchmark) {
     timer <- create_timer("LPPLS Confidence Indicator Calculation")
+    timer$checkpoint("Initialization", paste("Using", toupper(optimizer), "optimizer"))
   }
 
   ticker <- data
@@ -66,8 +68,15 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
 
   # Always show progress - make it more visible
   cat("Starting LPPLS Confidence Calculation...\n")
-  cat(sprintf("Processing %d windows with %d parallel workers\n", total_iterations, clusters))
+  cat(sprintf("Processing %d windows with %d parallel workers using %s optimizer\n",
+              total_iterations, clusters, toupper(optimizer)))
   cat(paste(rep("=", 50), collapse = ""), "\n")
+
+  # Set required packages based on optimizer
+  required_packages <- c("nloptr", "tseries")
+  if (optimizer %in% c("de", "hybrid")) {
+    required_packages <- c(required_packages, "DEoptim")
+  }
 
   # Install and load progress package if not available
   if (!requireNamespace("progress", quietly = TRUE)) {
@@ -108,28 +117,32 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
 
     # Parallel estimation across multiple time windows
     df_result <- foreach(i = seq(1, min(1437, nrow(sub_ticker) - 40), 1),
-                         .combine = rbind, .packages = c("nloptr", "tseries")) %dopar% {
+                         .combine = rbind,
+                         .packages = required_packages,
+                         .export = c("lppls_estimate", "lppls_de_optimize", "lppls_hybrid_optimize",
+                                     "lppls_objective_function", "calculate_linear_parameters",
+                                     "lppls_model", "optimizer")) %dopar% {
 
-                           # Select estimation window
-                           r_ticker <- sub_ticker[i:nrow(sub_ticker), ]
+                                       # Select estimation window
+                                       r_ticker <- sub_ticker[i:nrow(sub_ticker), ]
 
-                           # Ensure minimum window size
-                           if (nrow(r_ticker) < 40) return(NULL)
+                                       # Ensure minimum window size
+                                       if (nrow(r_ticker) < 40) return(NULL)
 
-                           result <- NULL
-                           attempts <- 0
-                           max_attempts <- 3
+                                       result <- NULL
+                                       attempts <- 0
+                                       max_attempts <- 3
 
-                           # Retry mechanism for robust estimation
-                           while (is.null(result) && attempts < max_attempts) {
-                             attempts <- attempts + 1
-                             try({
-                               result <- lppls_estimate(r_ticker)
-                             }, silent = TRUE)
-                           }
+                                       # Retry mechanism for robust estimation
+                                       while (is.null(result) && attempts < max_attempts) {
+                                         attempts <- attempts + 1
+                                         try({
+                                           result <- lppls_estimate(r_ticker, optimizer = optimizer)
+                                         }, silent = TRUE)
+                                       }
 
-                           return(result)
-                         }
+                                       return(result)
+                                     }
 
     # Filter results based on quality criteria
     if (!is.null(df_result) && nrow(df_result) > 0) {
@@ -139,7 +152,7 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
       # Save individual results if requested
       if (save) {
         if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
-        filename <- file.path(folder, paste0("df_result_", j, ".csv"))
+        filename <- file.path(folder, paste0("df_result_", j, "_", optimizer, ".csv"))
         write.csv(df_result, filename, row.names = FALSE)
       }
 
@@ -179,13 +192,23 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
     cat(sprintf("Window %d/%d (%.1f%%) completed in %.2fs | ETA: %.1fs\n",
                 completed, total_iterations, percent_complete, elapsed_this_window, eta))
     flush.console()
+
+    # Memory management every 2 windows
+    if (completed %% 2 == 0) {
+      gc(verbose = FALSE)
+    }
   }
+
+  # Always show completion message
+  cat("\n")
+  cat(paste(rep("=", 50), collapse = ""), "\n")
+  cat("✓ Window processing completed!\n")
 
   if (benchmark) {
     avg_window_time <- mean(window_times, na.rm = TRUE)
     timer$checkpoint("Window Processing",
-                     sprintf("Processed %d windows (avg: %.2fs per window)",
-                             total_iterations, avg_window_time))
+                     sprintf("Processed %d windows (avg: %.2fs per window) using %s",
+                             total_iterations, avg_window_time, toupper(optimizer)))
   }
 
   # Cleanup parallel processing
@@ -200,7 +223,7 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
   # Save final results if requested
   if (save) {
     if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
-    filename <- file.path(folder, "LPPLS_confidence_indicators.csv")
+    filename <- file.path(folder, paste0("LPPLS_confidence_indicators_", optimizer, ".csv"))
     write.csv(ticker, filename, row.names = FALSE)
 
     if (benchmark) {
@@ -214,6 +237,7 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
 
     # Add performance statistics
     cat("\nPerformance Statistics:\n")
+    cat(sprintf("  Optimizer used: %s\n", toupper(optimizer)))
     cat(sprintf("  Windows processed: %d\n", total_iterations))
     cat(sprintf("  Average time per window: %.2fs\n", mean(window_times, na.rm = TRUE)))
     cat(sprintf("  Fastest window: %.2fs\n", min(window_times, na.rm = TRUE)))
@@ -227,17 +251,9 @@ compute_lppls_confidence <- function(data, clusters = 4, window_size = 10,
       window_times = window_times,
       avg_window_time = mean(window_times, na.rm = TRUE),
       clusters = clusters,
-      total_windows = total_iterations
+      total_windows = total_iterations,
+      optimizer = optimizer
     )
-  }
-
-  return(ticker)
-
-  # Save final results if requested
-  if (save) {
-    if (!dir.exists(folder)) dir.create(folder, recursive = TRUE)
-    filename <- file.path(folder, "LPPLS_confidence_indicators.csv")
-    write.csv(ticker, filename, row.names = FALSE)
   }
 
   return(ticker)

@@ -12,7 +12,8 @@ compute_lppls_confidence(
   save = FALSE,
   folder = "./results/",
   progress = TRUE,
-  benchmark = TRUE
+  benchmark = TRUE,
+  optimizer = "mlsl"
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ compute_lppls_confidence(
 \item{progress}{Logical, whether to show progress tracking (default: TRUE)}
 
 \item{benchmark}{Logical, whether to show detailed timing information (default: TRUE)}
+
+\item{optimizer}{Character, optimization method to use ("mlsl", "de", or "hybrid")}
 }
 \value{
 Data frame with confidence indicators

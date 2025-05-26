@@ -8,7 +8,8 @@ quick_lppls_analysis(
   file_path,
   date_col = "Date",
   price_col = "Close",
-  plot_results = TRUE
+  plot_results = TRUE,
+  optimizer = "mlsl"
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ quick_lppls_analysis(
 \item{price_col}{Name of price column (default: "Close")}
 
 \item{plot_results}{Logical, whether to create plots (default: TRUE)}
+
+\item{optimizer}{Character, optimization method to use ("mlsl", "de", or "hybrid")}
 }
 \value{
 List with analysis results
@@ -28,12 +31,19 @@ Simplified function for quick LPPLS analysis of user data
 }
 \examples{
 \dontrun{
-# Analyze your data file
+# Analyze your data file with default MLSL
 results <- quick_lppls_analysis("my_data.csv")
+
+# Use DE optimizer for faster analysis
+results <- quick_lppls_analysis("my_data.csv", optimizer = "de")
+
+# Use hybrid optimizer for best quality
+results <- quick_lppls_analysis("my_data.csv", optimizer = "hybrid")
 
 # With custom column names
 results <- quick_lppls_analysis("my_data.csv",
                                date_col = "date",
-                               price_col = "price")
+                               price_col = "price",
+                               optimizer = "de")
 }
 }

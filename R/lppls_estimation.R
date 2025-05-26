@@ -2,16 +2,24 @@
 #'
 #' @param data A data frame with columns Date, Close, and t (decimal time)
 #' @param plot Logical, whether to plot the fitted model
+#' @param optimizer Character, optimization method to use ("mlsl" or "de")
 #' @return A data frame with estimation results and parameters
 #' @export
 #' @importFrom nloptr mlsl
+#' @importFrom DEoptim DEoptim
 #' @importFrom tseries kpss.test
 #' @importFrom lubridate decimal_date
-lppls_estimate <- function(data, plot = FALSE) {
+lppls_estimate <- function(data, plot = FALSE, optimizer = "mlsl") {
 
   # Validate input data
   if (!all(c("Date", "Close", "t") %in% names(data))) {
     stop("Data must contain columns: Date, Close, t")
+  }
+
+  # Validate optimizer parameter
+  valid_optimizers <- c("mlsl", "de")
+  if (!optimizer %in% valid_optimizers) {
+    stop("optimizer must be one of: ", paste(valid_optimizers, collapse = ", "))
   }
 
   ticker <- data
@@ -31,15 +39,20 @@ lppls_estimate <- function(data, plot = FALSE) {
   upper <- c(max(ticker$t) + 0.2 * dt, 2, 50)
   lower <- c(max(ticker$t) - 0.2 * dt, 0.01, 1)
 
-  # Optimize using MLSL algorithm
-  test <- mlsl(
-    start_search,
-    lppls_objective_function,
-    lower = lower,
-    upper = upper,
-    local.method = "LBFGS",
-    data = ticker
-  )
+  # Choose optimization method
+  if (optimizer == "de") {
+    test <- lppls_de_optimize(start_search, lower, upper, ticker)
+  } else if (optimizer == "mlsl") {
+    # Current MLSL implementation
+    test <- mlsl(
+      start_search,
+      lppls_objective_function,
+      lower = lower,
+      upper = upper,
+      local.method = "LBFGS",
+      data = ticker
+    )
+  }
 
   # Calculate linear parameters
   linear_param <- calculate_linear_parameters(ticker, test$par[1], test$par[2], test$par[3])
@@ -54,7 +67,8 @@ lppls_estimate <- function(data, plot = FALSE) {
   # Plot if requested
   if (plot) {
     plot(log(ticker$Close), type = "l", col = "red",
-         main = "LPPLS Model Fit", ylab = "Log Price", xlab = "Time")
+         main = paste("LPPLS Model Fit (", toupper(optimizer), ")", sep = ""),
+         ylab = "Log Price", xlab = "Time")
     lines(fitted, col = "blue")
     legend("topleft", c("Actual", "LPPLS Fit"), col = c("red", "blue"), lty = 1)
   }
@@ -86,11 +100,112 @@ lppls_estimate <- function(data, plot = FALSE) {
     dt_filter_high = last_row$t + 0.1 * dt,
     hazard = -linear_param[2] * test$par[2] - abs((linear_param[3]^2 + linear_param[4]^2)^0.5) * sqrt(test$par[2]^2 + test$par[3]^2),
     test_resid = as.numeric(test_resid),
-    resid_sum_sq = sum(residual^2)
+    resid_sum_sq = sum(residual^2),
+    optimizer_used = optimizer
   )
 
   rownames(results) <- NULL
   return(results)
+}
+
+#' Differential Evolution Optimization for LPPLS
+#'
+#' @param start_params Initial parameter vector [tc, m, w]
+#' @param lower Lower bounds vector
+#' @param upper Upper bounds vector
+#' @param data Time series data frame
+#' @return Optimization result compatible with MLSL output format
+#' @importFrom DEoptim DEoptim
+lppls_de_optimize <- function(start_params, lower, upper, data) {
+
+  # Set DE control parameters optimized for LPPLS
+  de_control <- list(
+    itermax = 200,           # Maximum iterations
+    CR = 0.9,               # Crossover probability
+    F = 0.8,                # Differential weight
+    strategy = 2,           # DE/rand/1/bin strategy
+    storepopfrom = 1,       # Store population for analysis
+    trace = FALSE,          # No verbose output
+    parallelType = 0,       # Use sequential processing (parallel handled at higher level)
+    packages = c("LPPLS"), # Required packages
+    parVar = c("data")      # Variables to export to workers
+  )
+
+  # Run differential evolution
+  de_result <- DEoptim(
+    fn = lppls_objective_function,
+    lower = lower,
+    upper = upper,
+    data = data,
+    control = de_control
+  )
+
+  # Convert DEoptim result to MLSL-compatible format
+  mlsl_compatible_result <- list(
+    par = as.vector(de_result$optim$bestmem),
+    value = de_result$optim$bestval,
+    iter = de_result$optim$iter,
+    convergence = ifelse(de_result$optim$iter < de_control$itermax, 0, 1),
+    message = paste("DE optimization completed in", de_result$optim$iter, "iterations")
+  )
+
+  return(mlsl_compatible_result)
+}
+
+#' Hybrid DE + Local Search Optimization for LPPLS
+#'
+#' @param start_params Initial parameter vector [tc, m, w]
+#' @param lower Lower bounds vector
+#' @param upper Upper bounds vector
+#' @param data Time series data frame
+#' @return Optimization result compatible with MLSL output format
+lppls_hybrid_optimize <- function(start_params, lower, upper, data) {
+
+  # Phase 1: Global search with DE (reduced iterations)
+  de_control <- list(
+    itermax = 100,    # Reduced for global phase
+    CR = 0.9,
+    F = 0.8,
+    strategy = 2,
+    trace = FALSE,
+    parallelType = 0
+  )
+
+  de_result <- DEoptim(
+    fn = lppls_objective_function,
+    lower = lower,
+    upper = upper,
+    data = data,
+    control = de_control
+  )
+
+  # Phase 2: Local refinement with L-BFGS-B
+  local_result <- optim(
+    par = as.vector(de_result$optim$bestmem),
+    fn = lppls_objective_function,
+    data = data,
+    method = "L-BFGS-B",
+    lower = lower,
+    upper = upper,
+    control = list(maxit = 100)
+  )
+
+  # Return best result from either phase
+  if (local_result$value < de_result$optim$bestval) {
+    return(list(
+      par = local_result$par,
+      value = local_result$value,
+      convergence = local_result$convergence,
+      message = "Hybrid optimization: Local search improved DE result"
+    ))
+  } else {
+    return(list(
+      par = as.vector(de_result$optim$bestmem),
+      value = de_result$optim$bestval,
+      convergence = 0,
+      message = "Hybrid optimization: DE result was optimal"
+    ))
+  }
 }
 
 #' LPPLS Model Function

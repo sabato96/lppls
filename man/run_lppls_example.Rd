@@ -8,7 +8,8 @@ run_lppls_example(
   generate_bubble = TRUE,
   n_observations = 500,
   plot_results = TRUE,
-  save_results = FALSE
+  save_results = FALSE,
+  optimizer = "mlsl"
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ run_lppls_example(
 \item{plot_results}{Logical, whether to create plots (default: TRUE)}
 
 \item{save_results}{Logical, whether to save results to files (default: FALSE)}
+
+\item{optimizer}{Character, optimization method to use ("mlsl", "de", or "hybrid")}
 }
 \value{
 List containing all analysis results
@@ -30,11 +33,14 @@ and create visualizations.
 }
 \examples{
 \dontrun{
-# Run basic example
+# Run basic example with MLSL
 results <- run_lppls_example()
 
-# Run example with bubble data
-bubble_results <- run_lppls_example(generate_bubble = TRUE)
+# Run example with DE optimizer and bubble data
+bubble_results <- run_lppls_example(generate_bubble = TRUE, optimizer = "de")
+
+# Run example with hybrid optimizer
+hybrid_results <- run_lppls_example(optimizer = "hybrid")
 
 # Access different components
 print(bubble_results$single_fit)

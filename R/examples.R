@@ -8,24 +8,36 @@
 #' @param n_observations Number of observations to generate (default: 500)
 #' @param plot_results Logical, whether to create plots (default: TRUE)
 #' @param save_results Logical, whether to save results to files (default: FALSE)
+#' @param optimizer Character, optimization method to use ("mlsl", "de", or "hybrid")
 #' @return List containing all analysis results
 #' @export
 #' @examples
 #' \dontrun{
-#' # Run basic example
+#' # Run basic example with MLSL
 #' results <- run_lppls_example()
 #'
-#' # Run example with bubble data
-#' bubble_results <- run_lppls_example(generate_bubble = TRUE)
+#' # Run example with DE optimizer and bubble data
+#' bubble_results <- run_lppls_example(generate_bubble = TRUE, optimizer = "de")
+#'
+#' # Run example with hybrid optimizer
+#' hybrid_results <- run_lppls_example(optimizer = "hybrid")
 #'
 #' # Access different components
 #' print(bubble_results$single_fit)
 #' head(bubble_results$confidence_indicators)
 #' }
 run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
-                              plot_results = TRUE, save_results = FALSE) {
+                              plot_results = TRUE, save_results = FALSE,
+                              optimizer = "mlsl") {
 
-  cat("Running LPPLS Analysis Example...\n\n")
+  # Validate optimizer parameter
+  valid_optimizers <- c("mlsl", "de", "hybrid")
+  if (!optimizer %in% valid_optimizers) {
+    stop("optimizer must be one of: ", paste(valid_optimizers, collapse = ", "))
+  }
+
+  cat("Running LPPLS Analysis Example...\n")
+  cat("Optimizer:", toupper(optimizer), "\n\n")
 
   # Step 1: Generate or load data
   cat("Step 1: Generating synthetic data...\n")
@@ -49,9 +61,9 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
   cat("Data validation passed\n")
 
   # Step 3: Estimate single LPPLS model
-  cat("Step 3: Estimating LPPLS model...\n")
+  cat("Step 3: Estimating LPPLS model using", toupper(optimizer), "optimizer...\n")
   single_fit <- try({
-    lppls_estimate(prepared_data, plot = FALSE)
+    lppls_estimate(prepared_data, plot = FALSE, optimizer = optimizer)
   }, silent = TRUE)
 
   if (inherits(single_fit, "try-error")) {
@@ -61,7 +73,8 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
     cat("Single model estimation completed\n")
     cat("Critical time (tc):", single_fit$tc, "\n")
     cat("Power law exponent (m):", single_fit$m, "\n")
-    cat("Log-periodic frequency (ω):", single_fit$w, "\n\n")
+    cat("Log-periodic frequency (ω):", single_fit$w, "\n")
+    cat("Optimizer used:", single_fit$optimizer_used, "\n\n")
   }
 
   # Step 4: Calculate confidence indicators with progress tracking
@@ -76,7 +89,8 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
       min_window = 1,
       save = save_results,
       progress = TRUE,     # Show progress bar
-      benchmark = TRUE     # Show detailed timing
+      benchmark = TRUE,    # Show detailed timing
+      optimizer = optimizer # Use specified optimizer
     )
   }, silent = TRUE)
 
@@ -100,7 +114,7 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
     # Plot 2: Single LPPLS fit if available
     if (!is.null(single_fit)) {
       plot_lppls_fit(prepared_data, single_fit,
-                     title = "LPPLS Model Fit Example",
+                     title = paste("LPPLS Model Fit -", toupper(optimizer), "Optimizer"),
                      show_critical_time = TRUE)
     }
 
@@ -109,7 +123,7 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
       # Check if we have confidence columns
       if ("P.S_EW" %in% names(confidence_results)) {
         plot_confidence_indicators(confidence_results, scale = "S",
-                                   title = "LPPLS Confidence Indicators Example")
+                                   title = paste("LPPLS Confidence Indicators -", toupper(optimizer)))
       }
     }
 
@@ -119,6 +133,7 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
   # Step 6: Summary
   cat("Step 6: Analysis Summary\n")
   cat("======================\n")
+  cat("Optimizer used:", toupper(optimizer), "\n")
   cat("Data points analyzed:", nrow(prepared_data), "\n")
   cat("Date range:", format(min(prepared_data$Date)), "to", format(max(prepared_data$Date)), "\n")
 
@@ -133,6 +148,15 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
 
   if (!is.null(confidence_results)) {
     cat("Confidence indicators calculated successfully\n")
+
+    # Show optimizer performance comparison if benchmark data available
+    benchmark_info <- attr(confidence_results, "benchmark")
+    if (!is.null(benchmark_info)) {
+      cat("Performance metrics:\n")
+      cat("  - Total time:", round(benchmark_info$total_time, 2), "seconds\n")
+      cat("  - Average window time:", round(benchmark_info$avg_window_time, 2), "seconds\n")
+      cat("  - Throughput:", round(benchmark_info$total_windows / (benchmark_info$total_time / 60), 2), "windows/minute\n")
+    }
   }
 
   # Return results
@@ -143,6 +167,7 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
     parameters = list(
       generate_bubble = generate_bubble,
       n_observations = n_observations,
+      optimizer = optimizer,
       analysis_date = Sys.Date()
     )
   )
@@ -161,23 +186,38 @@ run_lppls_example <- function(generate_bubble = TRUE, n_observations = 500,
 #' @param date_col Name of date column (default: "Date")
 #' @param price_col Name of price column (default: "Close")
 #' @param plot_results Logical, whether to create plots (default: TRUE)
+#' @param optimizer Character, optimization method to use ("mlsl", "de", or "hybrid")
 #' @return List with analysis results
 #' @export
 #' @examples
 #' \dontrun{
-#' # Analyze your data file
+#' # Analyze your data file with default MLSL
 #' results <- quick_lppls_analysis("my_data.csv")
+#'
+#' # Use DE optimizer for faster analysis
+#' results <- quick_lppls_analysis("my_data.csv", optimizer = "de")
+#'
+#' # Use hybrid optimizer for best quality
+#' results <- quick_lppls_analysis("my_data.csv", optimizer = "hybrid")
 #'
 #' # With custom column names
 #' results <- quick_lppls_analysis("my_data.csv",
 #'                                date_col = "date",
-#'                                price_col = "price")
+#'                                price_col = "price",
+#'                                optimizer = "de")
 #' }
 quick_lppls_analysis <- function(file_path, date_col = "Date", price_col = "Close",
-                                 plot_results = TRUE) {
+                                 plot_results = TRUE, optimizer = "mlsl") {
+
+  # Validate optimizer parameter
+  valid_optimizers <- c("mlsl", "de", "hybrid")
+  if (!optimizer %in% valid_optimizers) {
+    stop("optimizer must be one of: ", paste(valid_optimizers, collapse = ", "))
+  }
 
   cat("Quick LPPLS Analysis\n")
-  cat("===================\n\n")
+  cat("===================\n")
+  cat("Optimizer:", toupper(optimizer), "\n\n")
 
   # Load and prepare data
   cat("Loading data from:", file_path, "\n")
@@ -201,8 +241,8 @@ quick_lppls_analysis <- function(file_path, date_col = "Date", price_col = "Clos
   }
 
   # Estimate model
-  cat("Estimating LPPLS model...\n")
-  fit <- try(lppls_estimate(data, plot = plot_results), silent = TRUE)
+  cat("Estimating LPPLS model using", toupper(optimizer), "optimizer...\n")
+  fit <- try(lppls_estimate(data, plot = plot_results, optimizer = optimizer), silent = TRUE)
 
   if (inherits(fit, "try-error")) {
     cat("Model estimation failed\n")
@@ -214,7 +254,7 @@ quick_lppls_analysis <- function(file_path, date_col = "Date", price_col = "Clos
   # Quick confidence check (limited scope)
   cat("Calculating basic confidence indicators...\n")
   confidence <- try({
-    compute_lppls_confidence(data, clusters = 2, window_size = 3)
+    compute_lppls_confidence(data, clusters = 2, window_size = 3, optimizer = optimizer)
   }, silent = TRUE)
 
   if (inherits(confidence, "try-error")) {
@@ -224,6 +264,7 @@ quick_lppls_analysis <- function(file_path, date_col = "Date", price_col = "Clos
   # Results summary
   cat("\nAnalysis Results:\n")
   if (!is.null(fit)) {
+    cat("Optimizer used:", fit$optimizer_used, "\n")
     cat("Critical time estimated at:", format(as.Date("1970-01-01") + (fit$tc - 1970) * 365.25), "\n")
     cat("Days until critical time:", fit$days_to_tc, "\n")
     cat("Power law exponent (m):", round(fit$m, 3), "\n")
@@ -243,9 +284,129 @@ quick_lppls_analysis <- function(file_path, date_col = "Date", price_col = "Clos
     }
   }
 
+  # Show performance comparison hint
+  if (!is.null(confidence)) {
+    benchmark_info <- attr(confidence, "benchmark")
+    if (!is.null(benchmark_info)) {
+      cat("\nPerformance Note:\n")
+      cat("Try different optimizers for speed comparison:\n")
+      cat("  - 'mlsl': Most robust (default)\n")
+      cat("  - 'de': Typically 2-5x faster\n")
+      cat("  - 'hybrid': Best quality, moderate speed\n")
+    }
+  }
+
   return(list(
     data = data,
     fit = fit,
     confidence = confidence
   ))
+}
+
+#' Compare LPPLS Optimizers
+#'
+#' Benchmark different optimizers on the same dataset
+#'
+#' @param data Prepared LPPLS data frame
+#' @param optimizers Vector of optimizers to compare (default: c("mlsl", "de", "hybrid"))
+#' @param n_trials Number of trials per optimizer (default: 3)
+#' @return Data frame with comparison results
+#' @export
+#' @examples
+#' \dontrun{
+#' # Generate test data
+#' data <- generate_synthetic_data("bubble", n = 200)
+#' prepared_data <- prepare_lppls_data(data)
+#'
+#' # Compare optimizers
+#' comparison <- compare_lppls_optimizers(prepared_data)
+#' print(comparison)
+#' }
+compare_lppls_optimizers <- function(data, optimizers = c("mlsl", "de", "hybrid"), n_trials = 3) {
+
+  cat("Comparing LPPLS Optimizers\n")
+  cat("==========================\n")
+  cat("Data points:", nrow(data), "\n")
+  cat("Optimizers:", paste(optimizers, collapse = ", "), "\n")
+  cat("Trials per optimizer:", n_trials, "\n\n")
+
+  results <- data.frame()
+
+  for (optimizer in optimizers) {
+    cat("Testing", toupper(optimizer), "optimizer...\n")
+
+    for (trial in 1:n_trials) {
+      cat("  Trial", trial, "of", n_trials, "...")
+
+      start_time <- Sys.time()
+
+      fit_result <- try({
+        lppls_estimate(data, plot = FALSE, optimizer = optimizer)
+      }, silent = TRUE)
+
+      end_time <- Sys.time()
+      elapsed_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+      if (!inherits(fit_result, "try-error")) {
+        trial_result <- data.frame(
+          optimizer = optimizer,
+          trial = trial,
+          success = TRUE,
+          time_seconds = elapsed_time,
+          objective_value = fit_result$resid_sum_sq,
+          tc = fit_result$tc,
+          m = fit_result$m,
+          w = fit_result$w,
+          rel_err = fit_result$rel_err,
+          oscillations = fit_result$oscillations,
+          damping = fit_result$damping,
+          stringsAsFactors = FALSE
+        )
+        cat(" Success (", round(elapsed_time, 2), "s)\n")
+      } else {
+        trial_result <- data.frame(
+          optimizer = optimizer,
+          trial = trial,
+          success = FALSE,
+          time_seconds = elapsed_time,
+          objective_value = NA,
+          tc = NA,
+          m = NA,
+          w = NA,
+          rel_err = NA,
+          oscillations = NA,
+          damping = NA,
+          stringsAsFactors = FALSE
+        )
+        cat(" Failed\n")
+      }
+
+      results <- rbind(results, trial_result)
+    }
+    cat("\n")
+  }
+
+  # Summary statistics
+  cat("Summary Statistics:\n")
+  cat("==================\n")
+
+  for (optimizer in optimizers) {
+    opt_results <- results[results$optimizer == optimizer, ]
+    success_rate <- mean(opt_results$success) * 100
+    avg_time <- mean(opt_results$time_seconds, na.rm = TRUE)
+
+    if (any(opt_results$success)) {
+      successful_results <- opt_results[opt_results$success, ]
+      avg_objective <- mean(successful_results$objective_value, na.rm = TRUE)
+      avg_rel_err <- mean(successful_results$rel_err, na.rm = TRUE)
+
+      cat(sprintf("%s: Success rate: %.0f%%, Avg time: %.2fs, Avg RSS: %.4f, Avg rel_err: %.4f\n",
+                  toupper(optimizer), success_rate, avg_time, avg_objective, avg_rel_err))
+    } else {
+      cat(sprintf("%s: Success rate: %.0f%%, Avg time: %.2fs\n",
+                  toupper(optimizer), success_rate, avg_time))
+    }
+  }
+
+  return(results)
 }

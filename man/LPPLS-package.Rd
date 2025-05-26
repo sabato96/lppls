@@ -5,9 +5,9 @@
 \alias{LPPLS-package}
 \title{LPPLS: Log Periodic Power Law Singularity Model for Financial Bubbles}
 \description{
-Implementation of the Log Periodic Power Law Singularity (LPPLS) model for detecting and analyzing financial bubbles. The package provides functions for model estimation, confidence indicator calculation, and visualization of results. Based on the theoretical framework developed by Johansen, Ledoit, and Sornette for identifying critical points in financial time series that may precede market crashes.
+Implementation of the Log Periodic Power Law Singularity (LPPLS) model for detecting and analyzing financial bubbles. The package provides functions for model estimation, confidence indicator calculation, and visualization of results. Based on the theoretical framework developed by Johansen, Ledoit, and Sornette for identifying critical points in financial time series that may precede market crashes. Supports multiple optimization algorithms including MLSL, Differential Evolution, and hybrid approaches.
 
-Implementation of the Log Periodic Power Law Singularity (LPPLS) model for detecting and analyzing financial bubbles. The package provides functions for model estimation, confidence indicator calculation, and visualization of results. Based on the theoretical framework developed by Johansen, Ledoit, and Sornette for identifying critical points in financial time series that may precede market crashes.
+Implementation of the Log Periodic Power Law Singularity (LPPLS) model for detecting and analyzing financial bubbles. The package provides functions for model estimation, confidence indicator calculation, and visualization of results. Based on the theoretical framework developed by Johansen, Ledoit, and Sornette for identifying critical points in financial time series that may precede market crashes. Supports multiple optimization algorithms including MLSL, Differential Evolution, and hybrid approaches.
 }
 \section{Main Functions}{
 
