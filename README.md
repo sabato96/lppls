@@ -25,7 +25,7 @@ The LPPLS package provides a comprehensive implementation of the Log Periodic Po
 install.packages("devtools")
 
 # Install LPPLS package
-devtools::install_github("yourusername/LPPLS")
+devtools::install_github("sabato96/LPPLS")
 ```
 
 ### Dependencies
